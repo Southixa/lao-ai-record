@@ -1,0 +1,72 @@
+'use client';
+
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import Link from 'next/link';
+import { SignInButton, UserButton } from "@clerk/nextjs";
+import { Authenticated, Unauthenticated } from "convex/react";
+
+export default function Homepage() {
+  // ດຶງຂໍ້ມູນ todos ຈາກ Convex (ນີ້ເປັນເພຽງຕົວຢ່າງສະແດງການໃຊ້ Convex)
+  const todos = useQuery(api.todos.getTodos);
+  
+  const todosCount = todos?.length || 0;
+
+  return (
+    <main>
+      <div className="max-w-md mx-auto p-6 mt-10 bg-white rounded-lg shadow-md">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-center">ໜ້າຫຼັກ</h1>
+          <div>
+            <Unauthenticated>
+              <SignInButton mode="modal">
+                <button className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm">
+                  ເຂົ້າສູ່ລະບົບ
+                </button>
+              </SignInButton>
+            </Unauthenticated>
+            <Authenticated>
+              <UserButton afterSignOutUrl="/" />
+            </Authenticated>
+          </div>
+        </div>
+        
+        <Unauthenticated>
+          <div className="mb-6 text-center">
+            <p className="mb-4">ກະລຸນາເຂົ້າສູ່ລະບົບເພື່ອເບິ່ງເນື້ອຫາ</p>
+            <Link href="/sign-up" className="text-blue-500 hover:underline">
+              ຍັງບໍ່ມີບັນຊີ? ລົງທະບຽນທີ່ນີ້
+            </Link>
+          </div>
+        </Unauthenticated>
+        
+        <Authenticated>
+          <div className="mb-6">
+            <p className="mb-4">
+              ນີ້ແມ່ນຕົວຢ່າງການໃຊ້ Convex ເປັນ backend. ປັດຈຸບັນມີລາຍການ Todo {todosCount} ລາຍການ.
+            </p>
+            <p className="mb-4">
+              ຕົວຢ່າງນີ້ສາມາດໃຊ້ <code className="text-blue-600 bg-gray-100 px-1">useQuery</code> ເພື່ອດຶງຂໍ້ມູນແບບ real-time ຈາກ Convex.
+            </p>
+          </div>
+
+          <div className="flex flex-col space-y-3">
+            <Link 
+              href="/todolist" 
+              className="bg-blue-500 text-white px-4 py-3 rounded text-center hover:bg-blue-600 focus:outline-none"
+            >
+              ໄປທີ່ໜ້າ Todo List
+            </Link>
+            
+            <Link 
+              href="/record" 
+              className="bg-green-500 text-white px-4 py-3 rounded text-center hover:bg-green-600 focus:outline-none"
+            >
+              ໄປທີ່ໜ້າບັນທຶກຂໍ້ມູນ
+            </Link>
+          </div>
+        </Authenticated>
+      </div>
+    </main>
+  );
+} 
