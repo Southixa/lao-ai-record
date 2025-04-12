@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { FaMicrophone, FaStop, FaPlayCircle, FaPauseCircle } from 'react-icons/fa';
+import { FaMicrophone, FaStop, FaPlayCircle, FaPauseCircle, FaFileAlt } from 'react-icons/fa';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -11,7 +11,9 @@ import { PlusIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { useMutation, useAction } from "convex/react";
 import Navbar from "../../components/Navbar";
+import { api } from '../../../convex/_generated/api';
 
 export default function RecordPage() {
   const [isRecording, setIsRecording] = useState(false);
@@ -23,6 +25,8 @@ export default function RecordPage() {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [formattedTranscript, setFormattedTranscript] = useState<Array<{timecode: string; speaker: string; text: string}>>([]);
   
   // ສ້າງ refs ສຳລັບການອັດສຽງແລະຫຼິ້ນສຽງ
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -30,6 +34,9 @@ export default function RecordPage() {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
+
+  // ໃຊ້ Convex action
+  const transcribeAudio = useAction(api.transcribe.transcribeAudio);
 
   // ສ້າງຟັງຊັ່ນສຳລັບອັບເດດເວລາ
   const updateRecordingTime = () => {
@@ -51,6 +58,9 @@ export default function RecordPage() {
       audioChunksRef.current = [];
       setAudioBlob(null);
       setAudioUrl(null);
+      setTranscript("");
+      setSummary("");
+      setFormattedTranscript([]);
       
       // ສ້າງ MediaRecorder
       const mediaRecorder = new MediaRecorder(stream);
@@ -111,6 +121,61 @@ export default function RecordPage() {
         audioElementRef.current.play();
       }
       setIsPlaying(!isPlaying);
+    }
+  };
+
+  // ຟັງຊັ່ນສົ່ງສຽງໄປຖອດຄວາມທີ່ backend
+  const handleTranscribe = async () => {
+    if (!audioBlob) return;
+
+    try {
+      setIsTranscribing(true);
+
+      // ແປລງ Blob ເປັນ Base64 string
+      const reader = new FileReader();
+      
+      reader.onloadend = async () => {
+        try {
+          const base64data = (reader.result as string).split(',')[1]; // ເອົາສະເພາະຂໍ້ມູນຫຼັງຈາກ base64,
+          
+          // ສົ່ງໄປຫາ Convex function
+          const result = await transcribeAudio({
+            audioData: base64data,
+            language: "lo" // ຫຼື "en" ສຳລັບພາສາອັງກິດ
+          });
+          
+          if (result.success) {
+            setTranscript(result.transcript);
+            // ເພີ່ມການເກັບຮູບແບບ formatted transcript
+            if (result.formattedTranscript) {
+              setFormattedTranscript(result.formattedTranscript);
+            }
+            setIsTranscribing(false);
+          } else {
+            console.error("Error from transcription:", result.error);
+            alert("ເກີດຂໍ້ຜິດພາດໃນການຖອດຄວາມສຽງ");
+            setIsTranscribing(false);
+          }
+        } catch (error) {
+          console.error("Error during transcription:", error);
+          alert("ເກີດຂໍ້ຜິດພາດໃນການຖອດຄວາມສຽງ");
+          setIsTranscribing(false);
+        }
+      };
+      
+      reader.onerror = () => {
+        console.error("FileReader error");
+        setIsTranscribing(false);
+        alert("ເກີດຂໍ້ຜິດພາດໃນການອ່ານໄຟລ໌ສຽງ");
+      };
+      
+      // ເລີ່ມອ່ານໄຟລ໌ເປັນ Data URL
+      reader.readAsDataURL(audioBlob);
+      
+    } catch (error) {
+      console.error("Error transcribing audio:", error);
+      setIsTranscribing(false);
+      alert("ເກີດຂໍ້ຜິດພາດໃນການຖອດຄວາມສຽງ");
     }
   };
 
@@ -228,14 +293,30 @@ export default function RecordPage() {
                       </div>
                     </div>
                   </div>
+                  
+                  {/* ປຸ່ມຖອດຄວາມສຽງ */}
+                  <div className="mt-4 flex justify-center">
+                    <Button
+                      onClick={handleTranscribe}
+                      disabled={isTranscribing}
+                      className="bg-blue-500 hover:bg-blue-600 text-white"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FaFileAlt className="h-4 w-4" />
+                        <span>
+                          {isTranscribing ? "ກຳລັງຖອດຄວາມສຽງ..." : "ຖອດຄວາມສຽງ"}
+                        </span>
+                      </div>
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* ຖ້າມີການບັນທຶກສຽງແລ້ວຈະສະແດງພາກສ່ວນ Transcript ແລະ Summary */}
-          {transcript && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* ຖ້າມີການບັນທຶກສຽງແລ້ວຈະສະແດງພາກສ່ວນ Transcript */}
+          {(transcript || isTranscribing) && (
+            <div className="grid grid-cols-1 gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle>ຖອດຄວາມສຽງ</CardTitle>
@@ -245,21 +326,36 @@ export default function RecordPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="max-h-[400px] overflow-y-auto">
-                    <p className="whitespace-pre-line">{transcript}</p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>ບົດສະຫຼຸບ</CardTitle>
-                  <CardDescription>
-                    ບົດສະຫຼຸບຂອງການບັນທຶກສຽງ
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="max-h-[400px] overflow-y-auto">
-                    <p className="whitespace-pre-line">{summary}</p>
+                    {isTranscribing ? (
+                      <div className="flex flex-col items-center justify-center p-4">
+                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-sm text-gray-500">ກຳລັງຖອດຄວາມສຽງ...</p>
+                      </div>
+                    ) : formattedTranscript.length > 0 ? (
+                      <div className="space-y-4">
+                        {formattedTranscript.map((item, index) => (
+                          <div key={index} className="border-b pb-2 last:border-0">
+                            <div className="flex items-start">
+                              {item.timecode && (
+                                <div className="text-sm font-mono text-gray-500 mr-2 min-w-[50px]">
+                                  [{item.timecode}]
+                                </div>
+                              )}
+                              {item.speaker && (
+                                <div className="font-semibold text-blue-600 mr-2 min-w-[100px]">
+                                  {item.speaker}:
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                {item.text}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-line">{transcript}</p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
