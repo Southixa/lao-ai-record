@@ -14,12 +14,15 @@ import { UserButton } from "@clerk/nextjs";
 import { useMutation, useAction } from "convex/react";
 import Navbar from "../../components/Navbar";
 import { api } from '../../../convex/_generated/api';
+import ArrowToButton from '../../../public/svg/arrow_to_button.svg';
+import AudioPlayer from './AudioPlayer';
 
 export default function RecordPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState("00:00");
   const [transcript, setTranscript] = useState("");
   const [summary, setSummary] = useState("");
+  const [recordButtonClicks, setRecordButtonClicks] = useState(0);
   
   // ສ້າງ states ໃໝ່ສຳລັບເກັບຂໍ້ມູນສຽງທີ່ອັດ
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -28,7 +31,7 @@ export default function RecordPage() {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [formattedTranscript, setFormattedTranscript] = useState<Array<{timecode: string; speaker: string; text: string}>>([]);
   
-  // ສ້າງ refs ສຳລັບການອັດສຽງແລະຫຼິ້ນສຽງ
+  // ສ້າງ refs ສຳລັບການອັດສຽງ
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
@@ -124,6 +127,32 @@ export default function RecordPage() {
     }
   };
 
+  // ຟັງຊັ່ນສຳລັບຫຼິ້ນສຽງຈາກເວລາທີ່ກຳນົດ
+  const playFromTimestamp = (timestamp: string) => {
+    // ຊອກຫາ instance ຂອງ wavesurfer ຈາກ AudioPlayer component
+    // ໝາຍເຫດ: ວິທີນີ້ບໍ່ແມ່ນວິທີທີ່ດີທີ່ສຸດ ແລະ ອາດຈະບໍ່ເຮັດວຽກຖືກຕ້ອງ
+    // ວິທີທີ່ດີກວ່າແມ່ນການໃຊ້ forwardRef ຫຼື state management library
+    const wavesurferInstance = (window as any).wavesurferInstance; 
+    
+    if (!wavesurferInstance) {
+        console.error("Wavesurfer instance not found on window object");
+        return;
+    };
+    
+    // ແປງ timestamp ຈາກຮູບແບບ MM:SS ເປັນວິນາທີ
+    const [minutes, seconds] = timestamp.split(':').map(Number);
+    const timeInSeconds = minutes * 60 + seconds;
+    const duration = wavesurferInstance.getDuration();
+
+    if (duration > 0) {
+      const seekPosition = timeInSeconds / duration; // ຄິດໄລ່ຕຳແໜ່ງເປັນສ່ວນ (0 ຫາ 1)
+      wavesurferInstance.seekTo(seekPosition);
+      wavesurferInstance.play(); // ເລີ່ມຫຼິ້ນຫຼັງຈາກ seek
+    } else {
+        console.warn("Audio duration not available yet.");
+    }
+  };
+
   // ຟັງຊັ່ນສົ່ງສຽງໄປຖອດຄວາມທີ່ backend
   const handleTranscribe = async () => {
     if (!audioBlob) return;
@@ -200,6 +229,8 @@ export default function RecordPage() {
 
   // ຟັງຊັ່ນບັນທຶກສຽງຫຼືຢຸດບັນທຶກ
   const toggleRecording = () => {
+    setRecordButtonClicks(prev => prev + 1);
+    
     if (isRecording) {
       stopRecording();
     } else {
@@ -211,25 +242,29 @@ export default function RecordPage() {
     <div className="flex flex-col min-h-screen">
       <Navbar />
       
-      <main className="flex-1 flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 bg-gray-100">
-        <div className="max-w-4xl mx-auto p-6 my-10">
+      <main className="flex-1 flex flex-col items-center justify-center bg-gray-100">
+        <div className="max-w-4xl mx-auto p-4 my-10">
           {/* Audio Summary ພາກສ່ວນ Header */}
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold mb-3">ສະຫຼຸບສຽງດ້ວຍ AI</h1>
-            <p className="text-gray-500 max-w-2xl mx-auto">
-              ໃຊ້ AI ຖອດຄວາມສຽງແລະສ້າງບົດສະຫຼຸບດ້ວຍການຄລິກດຽວ. ນີ້ແມ່ນເຄື່ອງມືອອນໄລນ໌ທີ່ສາມາດຖອດຄວາມ
-              ແລະສະຫຼຸບເນື້ອຫາສຽງໄດ້.
+            <p className="text-gray-500 max-w-2xl mx-auto mt-4">
+            ອັດສຽງປະຊຸມ, ສົນທະນາກັບລູກຄ້າ, ລົມກັບໝູ່. ໃຊ້ AI ຖອດຂໍ້ຄວາມສຽງ, ສ້າງບົດສະຫຼຸບ ແລະ ຖາມຕອບດ້ວຍຄລິກດຽວ.
             </p>
           </div>
 
           {/* ພາກສ່ວນບັນທຶກສຽງ */}
           <div className="flex flex-col items-center justify-center mb-8">
             {/* ປຸ່ມບັນທຶກສຽງ */}
-            <div className="mb-6">
+            <div className="mb-6 relative">
+              {recordButtonClicks === 0 && (
+                <div className="absolute -right-14 -top-6 w-12 h-12 block opacity-50">
+                  <Image src={ArrowToButton} alt="Click to record" width={40} height={40} />
+                </div>
+              )}
               <Button
                 onClick={toggleRecording}
                 size="lg"
-                className={`rounded-full p-6 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-red-500 hover:bg-red-600"}`}
+                className={`rounded-full p-6 cursor-pointer ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-red-500 hover:bg-red-600"}`}
               >
                 <div className="flex items-center gap-2">
                   {isRecording ? (
@@ -249,104 +284,53 @@ export default function RecordPage() {
             
             {/* ຟັງສຽງທີ່ອັດ */}
             {audioUrl && (
-              <div className="w-full max-w-lg mt-4">
-                <div className="flex items-center justify-center mb-4">
-                  <Button 
-                    onClick={toggleAudio}
-                    variant="outline"
-                    className="flex items-center gap-2 bg-white"
-                  >
-                    {isPlaying ? (
-                      <>
-                        <FaPauseCircle className="h-5 w-5" />
-                        <span>ຢຸດຟັງ</span>
-                      </>
-                    ) : (
-                      <>
-                        <FaPlayCircle className="h-5 w-5" />
-                        <span>ຟັງສຽງທີ່ອັດໄດ້</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-                
-                <audio ref={audioElementRef} src={audioUrl} className="hidden" />
-                
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <div className="text-sm text-gray-500 mb-2">ສຽງທີ່ບັນທຶກໄດ້</div>
-                  <div className="h-24 bg-gray-100 rounded-md flex items-center justify-center">
-                    <div className="w-full px-4">
-                      <div className="h-16 w-full bg-gray-200 rounded-md overflow-hidden relative">
-                        {/* Audio waveform display */}
-                        <div className="h-full flex items-center justify-center">
-                          {Array.from({ length: 50 }).map((_, i) => (
-                            <div
-                              key={i}
-                              className={`w-1 mx-[1px] ${isPlaying ? 'animate-pulse' : ''}`}
-                              style={{
-                                height: `${15 + Math.random() * 50}%`,
-                                backgroundColor: isPlaying ? '#3b82f6' : '#9ca3af'
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {/* ປຸ່ມຖອດຄວາມສຽງ */}
-                  <div className="mt-4 flex justify-center">
-                    <Button
-                      onClick={handleTranscribe}
-                      disabled={isTranscribing}
-                      className="bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      <div className="flex items-center gap-2">
-                        <FaFileAlt className="h-4 w-4" />
-                        <span>
-                          {isTranscribing ? "ກຳລັງຖອດຄວາມສຽງ..." : "ຖອດຄວາມສຽງ"}
-                        </span>
-                      </div>
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <AudioPlayer 
+                audioUrl={audioUrl}
+                onTranscribe={handleTranscribe}
+                isTranscribing={isTranscribing}
+                playFromTimestamp={playFromTimestamp}
+              />
             )}
           </div>
 
           {/* ຖ້າມີການບັນທຶກສຽງແລ້ວຈະສະແດງພາກສ່ວນ Transcript */}
           {(transcript || isTranscribing) && (
             <div className="grid grid-cols-1 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>ຖອດຄວາມສຽງ</CardTitle>
-                  <CardDescription>
+              <Card className="overflow-hidden">
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-lg sm:text-xl">ຖອດຄວາມສຽງ</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
                     ການຖອດຄວາມສຽງຂອງທ່ານ
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="max-h-[400px] overflow-y-auto">
+                <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                  <div className="max-h-[300px] sm:max-h-[400px] overflow-y-auto">
                     {isTranscribing ? (
                       <div className="flex flex-col items-center justify-center p-4">
-                        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                        <p className="text-sm text-gray-500">ກຳລັງຖອດຄວາມສຽງ...</p>
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 border-3 sm:border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3 sm:mb-4"></div>
+                        <p className="text-xs sm:text-sm text-gray-500">ກຳລັງຖອດຄວາມສຽງ...</p>
                       </div>
                     ) : formattedTranscript.length > 0 ? (
-                      <div className="space-y-4">
+                      <div className="space-y-2 sm:space-y-4">
                         {formattedTranscript.map((item, index) => (
-                          <div key={index} className="border-b pb-2 last:border-0">
-                            <div className="flex items-start">
-                              {item.timecode && (
-                                <div className="text-sm font-mono text-gray-500 mr-2 min-w-[50px]">
-                                  [{item.timecode}]
-                                </div>
-                              )}
-                              {item.speaker && (
-                                <div className="font-semibold text-blue-600 mr-2 min-w-[100px]">
-                                  {item.speaker}:
-                                </div>
-                              )}
-                              <div className="flex-1">
+                          <div key={index} className="border-b pb-1 sm:pb-2 last:border-0">
+                            <div className="flex flex-col sm:flex-row sm:items-start">
+                              <div className="flex items-center mb-1 sm:mb-0">
+                                {item.timecode && (
+                                  <div 
+                                    className="text-xs sm:text-sm font-mono text-blue-500 mr-2 min-w-[40px] sm:min-w-[50px] cursor-pointer hover:underline"
+                                    onClick={() => playFromTimestamp(item.timecode)}
+                                  >
+                                    [{item.timecode}]
+                                  </div>
+                                )}
+                                {item.speaker && (
+                                  <div className="text-xs sm:text-sm font-semibold text-blue-600 mr-2">
+                                    {item.speaker}:
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex-1 text-xs sm:text-sm pl-1 sm:pl-0">
                                 {item.text}
                               </div>
                             </div>
@@ -354,7 +338,7 @@ export default function RecordPage() {
                         ))}
                       </div>
                     ) : (
-                      <p className="whitespace-pre-line">{transcript}</p>
+                      <p className="whitespace-pre-line text-xs sm:text-sm">{transcript}</p>
                     )}
                   </div>
                 </CardContent>
