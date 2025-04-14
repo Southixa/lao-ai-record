@@ -33,60 +33,28 @@ import { v } from "convex/values";
  */
 
 export default defineSchema({
-  // ຕາຕະລາງສຳລັບເກັບລາຍການ Todo
+
+  // ຕາຕະລາງສຳລັບເກັບລາຍການ Todo(ສຳັລບ test ຫ້າມລົບ)
   todos: defineTable({
     text: v.string(), // ຂໍ້ຄວາມຂອງ Todo
     completed: v.boolean(), // ສະຖານະວ່າເຮັດສຳເລັດຫຼືຍັງ
     createdAt: v.number(), // ເວລາທີ່ສ້າງ
   }),
-  
-  // ຕາຕະລາງສຳລັບເກັບຂໍ້ມູນຜູ້ໃຊ້ເພີ່ມເຕີມ
+
+
+  // ຕາຕະລາງສຳລັບເກັບຂໍ້ມູນຜູ້ໃຊ້
   users: defineTable({
-    userId: v.string(), // Clerk User ID
-    name: v.optional(v.string()), // ຊື່ຜູ້ໃຊ້ (ບໍ່ຈຳເປັນເພາະ Clerk ມີແລ້ວ)
-    email: v.optional(v.string()), // ອີເມວ (ບໍ່ຈຳເປັນເພາະ Clerk ມີແລ້ວ)
-    createdAt: v.number(), // ເວລາສ້າງບັນຊີໃນລະບົບ Convex
+    clerkId: v.optional(v.string()), // Clerk User ID (optional)
+    name: v.optional(v.string()), // ຊື່ຜູ້ໃຊ້
+    email: v.optional(v.string()), // ອີເມວ
+    createdAt: v.number(), // ເວລາສ້າງບັນຊີໃນລະບົບ
     lastLogin: v.optional(v.number()), // ເວລາເຂົ້າສູ່ລະບົບຄັ້ງລ່າສຸດ
-    preferences: v.optional(v.object({})), // ການຕັ້ງຄ່າຜູ້ໃຊ້ (ໃຊ້ v.any() ສຳລັບ JSON)
-  }),
-  
-  // ຕາຕະລາງ Audio Files
-  audioFiles: defineTable({
-    userId: v.string(), // ລະຫັດອ້າງອີງກັບ Clerk User ID
-    fileName: v.string(), // ຊື່ໄຟລ໌
-    filePath: v.string(), // ທີ່ຢູ່ເກັບໄຟລ໌
-    fileSize: v.number(), // ຂະໜາດຂອງໄຟລ໌ (bytes)
-    duration: v.optional(v.number()), // ຄວາມຍາວເປັນວິນາທີ
-    format: v.string(), // ຮູບແບບໄຟລ໌ (mp3, wav, etc)
-    uploadedAt: v.number(), // ເວລາອັບໂຫຼດ
-    processedStatus: v.string(), // ສະຖານະການປະມວນຜົນ (pending, processing, completed, failed)
-    storageId: v.optional(v.string()), // ID ຂອງໄຟລ໌ໃນ storage
-  }),
-  
-  // ຕາຕະລາງ Audio Transcripts
-  audioTranscripts: defineTable({
-    audioId: v.id("audioFiles"), // ລະຫັດເຊື່ອມໂຍງກັບໄຟລ໌ສຽງ
-    segmentStart: v.optional(v.number()), // ເວລາເລີ່ມຕົ້ນຂອງຊ່ວງສຽງ (ວິນາທີ)
-    segmentEnd: v.optional(v.number()), // ເວລາສິ້ນສຸດຂອງຊ່ວງສຽງ (ວິນາທີ)
-    speaker: v.optional(v.string()), // ຜູ້ເວົ້າ (ຖ້າລະບຸໄດ້)
-    content: v.string(), // ເນື້ອຫາການຖອດຄວາມ
-    createdAt: v.number(), // ເວລາສ້າງການຖອດຄວາມ
-    confidence: v.optional(v.number()), // ຄວາມເຊື່ອໝັ້ນຂອງການຖອດຄວາມ (0-1)
-  }),
-  
-  // ຕາຕະລາງ Summaries
-  summaries: defineTable({
-    audioId: v.id("audioFiles"), // ລະຫັດເຊື່ອມໂຍງກັບໄຟລ໌ສຽງ
-    summaryText: v.string(), // ເນື້ອຫາສະຫຼຸບທັງໝົດ
-    language: v.string(), // ພາສາຂອງການສະຫຼຸບ
-    createdAt: v.number(), // ເວລາສ້າງການສະຫຼຸບ
-    modelUsed: v.optional(v.string()), // ໂມເດລ AI ທີ່ໃຊ້ໃນການສະຫຼຸບ
+    preferences: v.optional(v.object({})), // ການຕັ້ງຄ່າຜູ້ໃຊ້
   }),
   
   // ຕາຕະລາງການສົນທະນາ (Conversations)
   conversations: defineTable({
-    userId: v.string(), // ລະຫັດອ້າງອີງກັບ Clerk User ID
-    audioId: v.optional(v.id("audioFiles")), // ລະຫັດເຊື່ອມໂຍງກັບໄຟລ໌ສຽງ (ຖ້າມີ)
+    userId: v.id("users"), // ລະຫັດອ້າງອີງກັບຜູ້ໃຊ້
     title: v.string(), // ຫົວຂໍ້ການສົນທະນາ
     createdAt: v.number(), // ເວລາສ້າງການສົນທະນາ
     updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
@@ -97,7 +65,51 @@ export default defineSchema({
     conversationId: v.id("conversations"), // ລະຫັດເຊື່ອມໂຍງກັບການສົນທະນາ
     role: v.string(), // ບົດບາດຂອງຜູ້ສົ່ງ (user, assistant, system)
     content: v.string(), // ເນື້ອຫາຂໍ້ຄວາມ
-    references: v.optional(v.string()), // ອ້າງອີງເຖິງຊ່ວງເວລາໃນ transcript (JSON string)
-    timestamp: v.number(), // ເວລາສົ່ງຂໍ້ຄວາມ
+    createdAt: v.number(), // ເວລາສ້າງຂໍ້ຄວາມ
+    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
+  }),
+  
+  // ຕາຕະລາງ Audio Files
+  audio: defineTable({
+    conversationId: v.id("conversations"), // ລະຫັດເຊື່ອມໂຍງກັບການສົນທະນາ
+    totalChunks: v.number(), // ຈຳນວນ chunks ທັງໝົດ
+    processedChunks: v.number(), // ຈຳນວນ chunks ທີ່ປະມວນຜົນແລ້ວ
+    isComplete: v.boolean(), // ບອກວ່າການປະມວນຜົນສຳເລັດທັງໝົດແລ້ວ
+    combinedTranscript: v.optional(v.string()), // ຜົນລວມການຖອດຄວາມທັງໝົດ
+    createdAt: v.number(), // ເວລາສ້າງ
+    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
+    processedStatus: v.string(), // ສະຖານະການປະມວນຜົນ (pending, processing, completed, failed)
+  }),
+  
+  // ຕາຕະລາງ Audio Chunks
+  audioChunks: defineTable({
+    audioId: v.id("audio"), // ລະຫັດອ້າງອີງກັບໄຟລ໌ສຽງຫຼັກ
+    chunkIndex: v.number(), // ລຳດັບຊິ້ນສ່ວນ (0, 1, 2, ...)
+    startTime: v.number(), // ເວລາເລີ່ມຕົ້ນໃນຟາຍຕົ້ນສະບັບ (ວິນາທີ)
+    endTime: v.number(), // ເວລາສິ້ນສຸດໃນຟາຍຕົ້ນສະບັບ (ວິນາທີ)
+    duration: v.number(), // ຄວາມຍາວຂອງຊິ້ນສ່ວນ (ວິນາທີ)
+    filePath: v.string(), // ເສັ້ນທາງຂອງຟາຍຊິ້ນສ່ວນ
+    processedStatus: v.string(), // ສະຖານະ (pending, processing, completed, failed)
+    storageId: v.optional(v.string()), // ID ຂອງຊິ້ນສ່ວນໃນລະບົບເກັບຂໍ້ມູນ
+    createdAt: v.number(), // ເວລາສ້າງຊິ້ນສ່ວນ
+    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
+  }),
+  
+  // ຕາຕະລາງ Audio Chunks Transcripts
+  audioChunksTranscripts: defineTable({
+    audioChunkId: v.id("audioChunks"), // ລະຫັດອ້າງອີງກັບຊິ້ນສ່ວນສຽງ
+    audioChunksTranscriptsIndex: v.number(), // ລຳດັບຂອງການຖອດຄວາມຊິ້ນສ່ວນ
+    formattedContent: v.string(), // ເນື້ອຫາທີ່ຈັດຮູບແບບແລ້ວ
+    createdAt: v.number(), // ເວລາສ້າງການຖອດຄວາມ
+    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
+  }),
+  
+  // ຕາຕະລາງ Summaries
+  sumaries: defineTable({
+    audioId: v.id("audio"), // ລະຫັດເຊື່ອມໂຍງກັບໄຟລ໌ສຽງ
+    summaryText: v.string(), // ເນື້ອຫາສະຫຼຸບທັງໝົດ
+    language: v.string(), // ພາສາຂອງການສະຫຼຸບ
+    createdAt: v.number(), // ເວລາສ້າງການສະຫຼຸບ
+    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
   }),
 }); 

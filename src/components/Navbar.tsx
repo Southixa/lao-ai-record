@@ -19,10 +19,14 @@ const Navbar = () => {
           <div className="flex items-center">
             <Link href="/" className="flex items-center">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 via-red-500 to-purple-600 flex items-center justify-center">
                   <FaMicrophone className="h-4 w-4 text-white" />
                 </div>
-                <span className="text-xl font-semibold text-blue-500">Lao-ai-record</span>
+                <span 
+                  className="text-xl font-semibold text-gray-700"
+                >
+                  Lao-ai-record
+                </span>
               </div>
             </Link>
           </div>

@@ -25,9 +25,11 @@ export const transcribeAudio = action({
       
       // ສ້າງ prompt ສຳລັບ Gemini API ທີ່ຂໍຮູບແບບ timecode, speaker, caption
       const prompt = `Transcribe the following audio file in ${languageName} language. 
+      If you detect other languages besides ${languageName} in the audio, transcribe those parts in their original language and combine them seamlessly without marking the language.
       Format the transcript with timecode, speaker identification, and caption.
       Use the format: [MM:SS] Speaker A/B/C: Caption text
       Identify different speakers as Speaker A, Speaker B, etc.
+      If there is no speech detected, return exactly "NO_SPEECH_DETECTED".
       Return only the formatted transcript without additional explanation.`;
       
       // ສົ່ງຄຳຂໍໄປຫາ Gemini API
@@ -74,6 +76,16 @@ export const transcribeAudio = action({
       
       // ດຶງເອົາເນື້ອຫາການຖອດຄວາມສຽງ
       const transcription = result.candidates[0].content.parts[0].text;
+      
+      // ກວດສອບກໍລະນີບໍ່ມີສຽງເວົ້າ
+      if (transcription.trim() === "NO_SPEECH_DETECTED") {
+        return {
+          success: true,
+          transcript: "NO_SPEECH_DETECTED",
+          formattedTranscript: [],
+          language: language
+        };
+      }
       
       // ປັບຮູບແບບຂໍ້ມູນໃຫ້ເປັນ structured format ສຳລັບໜ້າຈໍ frontend
       const transcriptLines = transcription.split('\n').filter((line: string) => line.trim() !== '');

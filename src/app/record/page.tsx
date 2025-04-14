@@ -160,6 +160,10 @@ export default function RecordPage() {
     try {
       setIsTranscribing(true);
 
+      // Log ຂະໜາດຟາຍກ່ອນສົ່ງ
+      const fileSizeInMB = (audioBlob.size / (1024 * 1024)).toFixed(2);
+      console.log(`Audio file size: ${fileSizeInMB} MB`);
+
       // ແປລງ Blob ເປັນ Base64 string
       const reader = new FileReader();
       
@@ -174,10 +178,20 @@ export default function RecordPage() {
           });
           
           if (result.success) {
-            setTranscript(result.transcript);
-            // ເພີ່ມການເກັບຮູບແບບ formatted transcript
-            if (result.formattedTranscript) {
-              setFormattedTranscript(result.formattedTranscript);
+            // ກວດສອບກໍລະນີບໍ່ມີສຽງເວົ້າ
+            if (result.transcript === "NO_SPEECH_DETECTED") {
+              setTranscript("ບໍ່ພົບສຽງເວົ້າໃນການບັນທຶກ ກະລຸນາລອງອັດສຽງໃໝ່ອີກຄັ້ງ");
+              setFormattedTranscript([{
+                timecode: "",
+                speaker: "",
+                text: "ບໍ່ພົບສຽງເວົ້າໃນການບັນທຶກ ກະລຸນາລອງອັດສຽງໃໝ່ອີກຄັ້ງ"
+              }]);
+            } else {
+              setTranscript(result.transcript);
+              // ເພີ່ມການເກັບຮູບແບບ formatted transcript
+              if (result.formattedTranscript) {
+                setFormattedTranscript(result.formattedTranscript);
+              }
             }
             setIsTranscribing(false);
           } else {
@@ -330,7 +344,7 @@ export default function RecordPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="flex-1 text-xs sm:text-sm pl-1 sm:pl-0">
+                              <div className={`flex-1 text-xs sm:text-sm pl-1 sm:pl-0 ${!item.timecode && !item.speaker ? "text-center text-orange-500 font-medium" : ""}`}>
                                 {item.text}
                               </div>
                             </div>
