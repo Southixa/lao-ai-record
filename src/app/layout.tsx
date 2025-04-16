@@ -3,6 +3,7 @@ import { Noto_Sans_Lao, Geist_Mono, Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import ConvexClientProvider from "./providers";
+import { Toaster } from "@/components/ui/sonner";
 
 const notoSansLao = Noto_Sans_Lao({
   weight: ['400', '500', '700'],
@@ -40,6 +41,7 @@ export default function RootLayout({
         >
           <ConvexClientProvider>
             {children}
+            <Toaster />
           </ConvexClientProvider>
         </body>
       </html>

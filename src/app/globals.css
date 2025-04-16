@@ -123,3 +123,18 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Add global styles for Sonner toast components */
+[data-sonner-toaster] [data-sonner-toast] {
+  font-family: var(--font-noto-sans-lao), var(--font-inter), sans-serif !important;
+}
+
+[data-sonner-toaster] [data-sonner-toast] [data-description],
+[data-sonner-toaster] [data-sonner-toast] [data-title] {
+  font-family: var(--font-noto-sans-lao), var(--font-inter), sans-serif !important;
+}
+
+/* Make sure the toast buttons also use the correct font */
+[data-sonner-toaster] [data-sonner-toast] button {
+  font-family: var(--font-noto-sans-lao), var(--font-inter), sans-serif !important;
+}

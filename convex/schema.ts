@@ -91,16 +91,8 @@ export default defineSchema({
     filePath: v.string(), // ເສັ້ນທາງຂອງຟາຍຊິ້ນສ່ວນ
     processedStatus: v.string(), // ສະຖານະ (pending, processing, completed, failed)
     storageId: v.optional(v.string()), // ID ຂອງຊິ້ນສ່ວນໃນລະບົບເກັບຂໍ້ມູນ
+    formattedContent: v.optional(v.string()), // ເນື້ອຫາທີ່ຈັດຮູບແບບແລ້ວ (ຈາກການຖອດຄວາມ)
     createdAt: v.number(), // ເວລາສ້າງຊິ້ນສ່ວນ
-    updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
-  }),
-  
-  // ຕາຕະລາງ Audio Chunks Transcripts
-  audioChunksTranscripts: defineTable({
-    audioChunkId: v.id("audioChunks"), // ລະຫັດອ້າງອີງກັບຊິ້ນສ່ວນສຽງ
-    audioChunksTranscriptsIndex: v.number(), // ລຳດັບຂອງການຖອດຄວາມຊິ້ນສ່ວນ
-    formattedContent: v.string(), // ເນື້ອຫາທີ່ຈັດຮູບແບບແລ້ວ
-    createdAt: v.number(), // ເວລາສ້າງການຖອດຄວາມ
     updatedAt: v.number(), // ເວລາອັບເດດລ່າສຸດ
   }),
   
