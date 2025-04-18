@@ -119,6 +119,62 @@ export const deleteAudio = mutation({
 });
 
 /**
+ * ດຶງຂໍ້ມູລ audio ດ້ວຍ ID ພ້ອມລວມ transcript ຈາກ chunks
+ */
+export const getAudioWithCombinedTranscript = mutation({
+  args: { audioId: v.id("audio") },
+  handler: async (ctx, args) => {
+    const { audioId } = args;
+    
+    // ດຶງ audio ຈາກ ID
+    const audio = await ctx.db.get(audioId);
+    if (!audio) {
+      throw new Error("Audio not found");
+    }
+    
+    // ດຶງຂໍ້ມູນທຸກ chunks ທີ່ຕິດພັນກັບ audio ນີ້
+    const audioChunks = await ctx.db
+      .query("audioChunks")
+      .filter((q) => q.eq(q.field("audioId"), audioId))
+      .collect();
+    
+    // ຈັດລຽງຕາມ chunkIndex
+    audioChunks.sort((a, b) => a.chunkIndex - b.chunkIndex);
+    
+    // ລວມເອົາແຕ່ formattedContent ຈາກທຸກ chunks
+    const combinedTranscriptArray = audioChunks
+      .filter(chunk => chunk.formattedContent && typeof chunk.formattedContent === 'string') // ກັ່ນຕອງເອົາສະເພາະ chunks ທີ່ມີ formattedContent ເປັນ string
+      .map(chunk => {
+        try {
+          // ພະຍາຍາມແປງ formattedContent ຈາກ string ເປັນ object
+          return JSON.parse(chunk.formattedContent as string);
+        } catch (error) {
+          console.error("Error parsing formattedContent:", error);
+          return [];
+        }
+      });
+    
+    // ລວມເປັນ array ດຽວ
+    const flattenedTranscript = combinedTranscriptArray.flat();
+    
+    // ແປງເປັນ string ແລະ ອັບເດດ audio
+    const combinedTranscript = JSON.stringify(flattenedTranscript);
+    
+    // ອັບເດດ audio ດ້ວຍ combinedTranscript
+    await ctx.db.patch(audioId, {
+      combinedTranscript,
+      processedStatus: "completed",
+      updatedAt: Date.now()
+    });
+    
+    // ດຶງ audio ອີກຄັ້ງເພື່ອເອົາຂໍ້ມູນລ່າສຸດ
+    const updatedAudio = await ctx.db.get(audioId);
+    
+    return updatedAudio;
+  },
+});
+
+/**
  * ເພີ່ມ audio chunk
  */
 export const addAudioChunk = mutation({

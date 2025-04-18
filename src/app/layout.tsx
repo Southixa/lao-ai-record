@@ -6,7 +6,7 @@ import ConvexClientProvider from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 
 const notoSansLao = Noto_Sans_Lao({
-  weight: ['400', '500', '700'],
+  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
   variable: "--font-noto-sans-lao",
   subsets: ["lao"],
 });

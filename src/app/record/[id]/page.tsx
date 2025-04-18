@@ -24,8 +24,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DisableRecordButton } from './DisableRecordButton';
+import { LoadingAnimationText } from './LoadingAnimationText';
+import { TranscriptSection } from './TranscriptSection';
 
 export default function RecordPage() {
+
 
   const params = useParams();
   const searchParams = useSearchParams();
@@ -37,6 +41,7 @@ export default function RecordPage() {
   const [currentAudioId, setCurrentAudioId] = useState<Id<"audio"> | null>(null);
   const [showStopConfirmation, setShowStopConfirmation] = useState(false);
   const [recordingTime, setRecordingTime] = useState("00:00");
+  const [openTranscript, setOpenTranscript] = useState(false);
 
 
 
@@ -44,7 +49,11 @@ export default function RecordPage() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
   const chunkIndexRef = useRef<number>(0);
+  const chunkIndexRefSuccessCount = useRef<number>(0);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isLastChunkRef = useRef<boolean>(false);
+
+  const isStartByQueryFirsttimeRef = useRef<boolean>(false);
 
 
   // ໃຊ້ Convex action ແລະ mutation
@@ -53,11 +62,62 @@ export default function RecordPage() {
   const updateAudio = useMutation(api.audio.updateAudio);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
+  // ກວດສອບເມື່ອ component unmount ເພື່ອຢຸດການບັນທຶກຖ້າຍັງບັນທຶກຢູ່
+  useEffect(() => {
+    return () => {
+      console.log("is recording?", isRecording);
+      if (mediaRecorderRef.current) {
+        console.log("Component unmounting while recording - stopping recording");
+        stopRecordingOnUnmount();
+      }
+    };
+  }, []);
+
+    // ເລີ່ມການບັນທຶກໂດຍອັດຕະໂນມັດ ຖ້າມີ query parameter startNow=yes
+    useEffect(() => {
+      const shouldStartNow = searchParams.get('startNow') === 'yes';
+      
+      if (shouldStartNow && !isRecording && !isStartByQueryFirsttimeRef.current) {
+  
+        // ລົບ query parameter ອອກຈາກ URL ໂດຍບໍ່ມີການ refresh
+        const cleanUrl = `/record/${conversationId}`;
+        router.replace(cleanUrl, { scroll: false });
+        
+        // ປ້ອງກັນໃຫ້ເຮັດວຽກແຕ່ຄັ້ງດຽວ
+        isStartByQueryFirsttimeRef.current = true;
+  
+        startRecording();
+      }
+    }, [searchParams]);
+
 
 
   // ຟັງຊັ່ນເລີ່ມການບັນທຶກສຽງ
   const startRecording = async () => {
     console.log("start recording");
+
+    // Prevent starting multiple recordings
+    if (isRecording || mediaRecorderRef.current) {
+      console.log("Recording already in progress, ignoring startRecording call");
+      return;
+    }
+
+    // Reset all recording related state to ensure clean start
+    isLastChunkRef.current = false;
+    chunkIndexRef.current = 0;
+    chunkIndexRefSuccessCount.current = 0;
+    
+    // Clear any existing timers/intervals as precaution
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
+    if (recordingIntervalRef.current) {
+      clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+    
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -79,29 +139,87 @@ export default function RecordPage() {
           mediaRecorderRef.current.stop();
           await recordAndSend(stream, audioId);
         }
-      }, 10000);
+      }, 60000);
 
       // ເລີ່ມຈັບເວລາການບັນທຶກ
       startTimeRef.current = Date.now();
       timerRef.current = setInterval(updateRecordingTime, 1000);
 
     } catch (error) {
-      console.error("Error starting recording:", error);
+      if (String(error).includes("NotAllowedError")) {
+        toast.error('ບໍ່ສາມາດເຂົ້າເຖິງໄມໂຄຣໂຟນໄດ້', {
+          position: 'top-center',
+          description: 'ກະລຸນາກວດສອບການອະນຸຍາດອຸປະກອນຂອງທ່ານ.',
+          duration: 5000,
+        });
+        return;
+      }
+      console.log("Error starting recording:", error);
     }
   };
 
   const stopRecording = () => {
     console.log("stop recording");
     if (mediaRecorderRef.current && isRecording && timerRef.current && recordingIntervalRef.current) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
+      isLastChunkRef.current = true;
 
-      // ຢຸດຈັບເວລາການບັນທຶກ
-      clearInterval(timerRef.current);
-      clearInterval(recordingIntervalRef.current);
+      // ຢຸດຈັບເວລາການບັນທຶກ - ແຍກເພື່ອປ້ອງກັນບໍ່ໃຫ້ເກີດ null errors
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
       
       // ຢຸດ stream
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+          // ຢຸດການບັນທຶກສຽງ
+    if (mediaRecorderRef.current) {
+      console.log("Stopping media recorder");
+      mediaRecorderRef.current.stop();
+      
+      // ຢຸດ stream
+      if (mediaRecorderRef.current.stream) {
+        console.log("Stopping media tracks");
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+    }
+
+    setIsRecording(false);
+    }
+  }
+
+  const stopRecordingOnUnmount = () => {
+    console.log("stop recording on unmount");
+    if (mediaRecorderRef.current && timerRef.current && recordingIntervalRef.current) {
+      isLastChunkRef.current = true;
+
+      // ຢຸດຈັບເວລາການບັນທຶກ - ແຍກເພື່ອປ້ອງກັນບໍ່ໃຫ້ເກີດ null errors
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+      
+      // ຢຸດ stream
+          // ຢຸດການບັນທຶກສຽງ
+    if (mediaRecorderRef.current) {
+      console.log("Stopping media recorder");
+      mediaRecorderRef.current.stop();
+      
+      // ຢຸດ stream
+      if (mediaRecorderRef.current.stream) {
+        console.log("Stopping media tracks");
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      }
+    }
+
     }
   }
 
@@ -159,6 +277,7 @@ export default function RecordPage() {
 
   const recordAndSend = async (stream: MediaStream, audioId: Id<"audio">) => {
     try {
+
       const mediaRecorder = new MediaRecorder(stream);
       const chunks: Blob[] = [];
 
@@ -175,9 +294,16 @@ export default function RecordPage() {
         const audioBlob = new Blob(chunks, { type: "audio/webm" });
         console.log("chunkIndexRef.current:", chunkIndexRef.current);
 
+        chunkIndexRef.current++;
+
         await handleUploadAudioChunk(audioBlob, audioId, chunkIndexRef.current);
 
-        chunkIndexRef.current++;
+        chunkIndexRefSuccessCount.current++;
+
+        // ສຳລັບ check ວ່າສາມາດເປີດ transcript ໄດ້ແລ້ວບໍ່
+        if(isLastChunkRef.current && (chunkIndexRefSuccessCount.current === chunkIndexRef.current)){
+          setOpenTranscript(true);
+        }
       };
 
       mediaRecorder.start();
@@ -221,39 +347,50 @@ export default function RecordPage() {
     };
   
 
+    
+
 
   return (
     <div className="flex flex-col min-h-screen">
       <Navbar />
       
-      <main className="flex-1 flex flex-col items-center justify-center bg-gray-100">
-        <div className="max-w-4xl mx-auto p-4 my-10">
+      <main className="flex-1 flex flex-col items-center pt-24 bg-gray-100">
+        <div className="max-w-4xl mx-auto p-4 mt-10">
           <Header />
 
           {/* ພາກສ່ວນບັນທຶກສຽງ */}
-          <div className="flex flex-col items-center justify-center mb-8">
+          <div className="flex flex-col items-center justify-center">
             {/* ປຸ່ມບັນທຶກສຽງ */}
             <div className="mb-6 relative">
-              <Button
-                onClick={toggleRecording}
-                size="lg"
-                className={`rounded-full p-6 cursor-pointer ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-red-500 hover:bg-red-600"}`}
-              >
-                <div className="flex items-center gap-2">
-                  {isRecording ? (
-                    <FaStop className="h-5 w-5 text-white" />
-                  ) : (
-                    <FaMicrophone className="h-5 w-5 text-white" />
-                  )}
-                  <span className="text-white font-medium">{isRecording ? "ຢຸດການບັນທຶກ" : "ເລີ່ມການບັນທຶກ"}</span>
-                </div>
-              </Button>
+              {!isLastChunkRef.current && (
+                  <Button
+                  onClick={toggleRecording}
+                  size="lg"
+                  className={`rounded-full p-6 cursor-pointer border-1 border-red-500 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-red-500 hover:bg-red-600"}`}
+                >
+                  <div className="flex items-center gap-2">
+                    {isRecording ? (
+                      <FaStop className="h-5 w-5 text-white" />
+                    ) : (
+                      <FaMicrophone className="h-5 w-5 text-white" />
+                    )}
+                    <span className="text-white font-medium">{isRecording ? "ຢຸດການບັນທຶກ" : "ເລີ່ມການບັນທຶກ"}</span>
+                  </div>
+                </Button>
+              )}
+              {isLastChunkRef.current && (
+                  <DisableRecordButton />
+              )}
             </div>
 
             {/* ເວລາການບັນທຶກ */}
             <div className="text-7xl font-mono text-gray-300 tracking-wider mb-6">
               {recordingTime}
             </div>
+
+            {isLastChunkRef.current && !openTranscript && (
+              <LoadingAnimationText />
+            )}
 
           </div>
 
@@ -279,6 +416,16 @@ export default function RecordPage() {
             </AlertDialogContent>
           </AlertDialog>
         </div>
+
+
+        {currentAudioId && openTranscript && (
+          <div className='max-w-[705px] w-full mx-auto p-4 my-10'>
+              <TranscriptSection audioId={currentAudioId} />
+          </div>
+        )}
+
+        
+
       </main>
     </div>
   );
