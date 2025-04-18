@@ -27,6 +27,10 @@ import {
 import { DisableRecordButton } from './DisableRecordButton';
 import { LoadingAnimationText } from './LoadingAnimationText';
 import { TranscriptSection } from './TranscriptSection';
+import { useChunkedAudioRecorder } from '@/hooks/useChunkedAudioRecorder';
+import { stat } from 'fs';
+import { StartRecordButton } from './StartRecordButton';
+import { StopRecordButton } from './StopRecordButton';
 
 export default function RecordPage() {
 
@@ -36,48 +40,42 @@ export default function RecordPage() {
   const router = useRouter();
   const conversationId = params.id as string;
 
-  
-  const [isRecording, setIsRecording] = useState(false);
-  const [currentAudioId, setCurrentAudioId] = useState<Id<"audio"> | null>(null);
-  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
-  const [recordingTime, setRecordingTime] = useState("00:00");
-  const [openTranscript, setOpenTranscript] = useState(false);
+  const [openTranscript, setOpenTranscript] = useState<boolean>(false);
 
-
-
-  const mediaRecorderRef = useRef<MediaRecorder>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const chunkIndexRef = useRef<number>(0);
-  const chunkIndexRefSuccessCount = useRef<number>(0);
-  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isLastChunkRef = useRef<boolean>(false);
-
+  const isStartErrorRef = useRef<boolean>(false);
+  const currentAudioIdRef = useRef<Id<"audio"> | null>(null);
   const isStartByQueryFirsttimeRef = useRef<boolean>(false);
+  const chunkIndexCountRef = useRef<number>(0);
+  const chunkIndexSuccessCountRef = useRef<number>(0);
 
-
-  // ໃຊ້ Convex action ແລະ mutation
   const createAudioChunkWithTranscribe = useAction(api.audioChunks.createAudioChunkWithTranscribe);
   const createAudio = useMutation(api.audio.createAudio);
   const updateAudio = useMutation(api.audio.updateAudio);
   const generateUploadUrl = useMutation(api.storage.generateUploadUrl);
 
-  // ກວດສອບເມື່ອ component unmount ເພື່ອຢຸດການບັນທຶກຖ້າຍັງບັນທຶກຢູ່
-  useEffect(() => {
-    return () => {
-      console.log("is recording?", isRecording);
-      if (mediaRecorderRef.current) {
-        console.log("Component unmounting while recording - stopping recording");
-        stopRecordingOnUnmount();
+  const handleChunkAudio = async (blob: Blob, chunkIndex: number) => {
+    if(isStartErrorRef.current) return;
+    try {
+      chunkIndexCountRef.current++;
+      await handleUploadAudioChunk(blob, currentAudioIdRef.current as Id<"audio">, chunkIndex);
+      chunkIndexSuccessCountRef.current++;
+      if(chunkIndexCountRef.current === chunkIndexSuccessCountRef.current) {
+        setOpenTranscript(true);
       }
-    };
-  }, []);
+    } catch (error) {
+      console.log("Error uploading audio chunk:", error);
+    }
+  };
 
-    // ເລີ່ມການບັນທຶກໂດຍອັດຕະໂນມັດ ຖ້າມີ query parameter startNow=yes
+  const { status, recordingTime, start, stop, pause, resume, reset } = useChunkedAudioRecorder({
+    onChunk: handleChunkAudio,
+    timesliceSeconds: 60,
+});
+
     useEffect(() => {
       const shouldStartNow = searchParams.get('startNow') === 'yes';
       
-      if (shouldStartNow && !isRecording && !isStartByQueryFirsttimeRef.current) {
+      if (shouldStartNow && status === 'idle' && !isStartByQueryFirsttimeRef.current) {
   
         // ລົບ query parameter ອອກຈາກ URL ໂດຍບໍ່ມີການ refresh
         const cleanUrl = `/record/${conversationId}`;
@@ -91,138 +89,6 @@ export default function RecordPage() {
     }, [searchParams]);
 
 
-
-  // ຟັງຊັ່ນເລີ່ມການບັນທຶກສຽງ
-  const startRecording = async () => {
-    console.log("start recording");
-
-    // Prevent starting multiple recordings
-    if (isRecording || mediaRecorderRef.current) {
-      console.log("Recording already in progress, ignoring startRecording call");
-      return;
-    }
-
-    // Reset all recording related state to ensure clean start
-    isLastChunkRef.current = false;
-    chunkIndexRef.current = 0;
-    chunkIndexRefSuccessCount.current = 0;
-    
-    // Clear any existing timers/intervals as precaution
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    
-    if (recordingIntervalRef.current) {
-      clearInterval(recordingIntervalRef.current);
-      recordingIntervalRef.current = null;
-    }
-    
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-       // ສ້າງບັນທຶກສຽງໃໝ່ໃນຖານຂໍ້ມູນກ່ອນເລີ່ມການບັນທຶກສຽງ
-       const result = await createAudio({
-        conversationId: conversationId as Id<"conversations">,
-        processedStatus: "recording"
-      });
-
-      const audioId = result.audioId;
-      console.log("Audio created, audioId:", audioId);
-      setCurrentAudioId(audioId);
-
-      await recordAndSend(stream, audioId);
-
-      recordingIntervalRef.current = setInterval( async () => {
-        if(mediaRecorderRef.current) {
-          mediaRecorderRef.current.stop();
-          await recordAndSend(stream, audioId);
-        }
-      }, 60000);
-
-      // ເລີ່ມຈັບເວລາການບັນທຶກ
-      startTimeRef.current = Date.now();
-      timerRef.current = setInterval(updateRecordingTime, 1000);
-
-    } catch (error) {
-      if (String(error).includes("NotAllowedError")) {
-        toast.error('ບໍ່ສາມາດເຂົ້າເຖິງໄມໂຄຣໂຟນໄດ້', {
-          position: 'top-center',
-          description: 'ກະລຸນາກວດສອບການອະນຸຍາດອຸປະກອນຂອງທ່ານ.',
-          duration: 5000,
-        });
-        return;
-      }
-      console.log("Error starting recording:", error);
-    }
-  };
-
-  const stopRecording = () => {
-    console.log("stop recording");
-    if (mediaRecorderRef.current && isRecording && timerRef.current && recordingIntervalRef.current) {
-      isLastChunkRef.current = true;
-
-      // ຢຸດຈັບເວລາການບັນທຶກ - ແຍກເພື່ອປ້ອງກັນບໍ່ໃຫ້ເກີດ null errors
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-        recordingIntervalRef.current = null;
-      }
-      
-      // ຢຸດ stream
-          // ຢຸດການບັນທຶກສຽງ
-    if (mediaRecorderRef.current) {
-      console.log("Stopping media recorder");
-      mediaRecorderRef.current.stop();
-      
-      // ຢຸດ stream
-      if (mediaRecorderRef.current.stream) {
-        console.log("Stopping media tracks");
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-    }
-
-    setIsRecording(false);
-    }
-  }
-
-  const stopRecordingOnUnmount = () => {
-    console.log("stop recording on unmount");
-    if (mediaRecorderRef.current && timerRef.current && recordingIntervalRef.current) {
-      isLastChunkRef.current = true;
-
-      // ຢຸດຈັບເວລາການບັນທຶກ - ແຍກເພື່ອປ້ອງກັນບໍ່ໃຫ້ເກີດ null errors
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-
-      if (recordingIntervalRef.current) {
-        clearInterval(recordingIntervalRef.current);
-        recordingIntervalRef.current = null;
-      }
-      
-      // ຢຸດ stream
-          // ຢຸດການບັນທຶກສຽງ
-    if (mediaRecorderRef.current) {
-      console.log("Stopping media recorder");
-      mediaRecorderRef.current.stop();
-      
-      // ຢຸດ stream
-      if (mediaRecorderRef.current.stream) {
-        console.log("Stopping media tracks");
-        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      }
-    }
-
-    }
-  }
-
   const handleUploadAudioChunk = async (blob: Blob, audioId: Id<"audio">, chunkIndex: number = 0) => {
       if(!blob){
         throw new Error("Blob is null");
@@ -232,7 +98,7 @@ export default function RecordPage() {
       }
       try {
         const fileSizeInMB = (blob.size / (1024 * 1024)).toFixed(2);
-        console.log(`Audio chunk ${chunkIndex} file size: ${fileSizeInMB} MB`);
+        console.log(`Audio chunk ${chunkIndex} file size: ${fileSizeInMB} MB, chunkIndex: ${chunkIndex}`);
 
 
         // 1. Get upload URL
@@ -254,7 +120,7 @@ export default function RecordPage() {
         endTime: blob.size,
         duration: 60,
         filePath: `conversation/${conversationId}/audio/${audioId}/chunk-${chunkIndex}`,
-        storageId: audioStorageId,
+        storageId: audioStorageId as Id<"_storage">,
         processedStatus: "pending",
         
         // transcribeAudio ພາລາມິເຕີ
@@ -270,81 +136,46 @@ export default function RecordPage() {
 
 
       } catch (error) {
-        console.error("Error uploading audio chunk:", error);
         throw error;
       }
   }
 
-  const recordAndSend = async (stream: MediaStream, audioId: Id<"audio">) => {
+
+  const startRecording = async () => {
     try {
-
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-
-      setIsRecording(true);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: "audio/webm" });
-        console.log("chunkIndexRef.current:", chunkIndexRef.current);
-
-        chunkIndexRef.current++;
-
-        await handleUploadAudioChunk(audioBlob, audioId, chunkIndexRef.current);
-
-        chunkIndexRefSuccessCount.current++;
-
-        // ສຳລັບ check ວ່າສາມາດເປີດ transcript ໄດ້ແລ້ວບໍ່
-        if(isLastChunkRef.current && (chunkIndexRefSuccessCount.current === chunkIndexRef.current)){
-          setOpenTranscript(true);
-        }
-      };
-
-      mediaRecorder.start();
+      isStartErrorRef.current = false;
+      await start();
+      if(currentAudioIdRef.current) return;
+      const result = await createAudio({
+        conversationId: conversationId as Id<"conversations">,
+        processedStatus: "recording"
+      });
+      const audioId = result.audioId;
+      console.log("Audio created, audioId:", audioId);
+      currentAudioIdRef.current = audioId;
     } catch (error) {
-      setIsRecording(false);
-      console.error("Error starting recording:", error);
+      if (String(error).includes("NotAllowedError")) {
+        toast.error('ບໍ່ສາມາດເຂົ້າເຖິງໄມໂຄຣໂຟນໄດ້', {
+          position: 'top-center',
+          description: 'ກະລຸນາກວດສອບການອະນຸຍາດອຸປະກອນຂອງທ່ານ.',
+          duration: 5000,
+        });
+        return;
+      }
+      console.log("Error starting recording:", error);
+      toast.error('ຜິດພາດ', {
+        description: 'ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ ກະລຸນາລອງໃຫມ່ອີກຄັ້ງພາຍຫຼັງ.',
+        duration: 5000,
+      });
+      isStartErrorRef.current = true;
+      reset();
     }
   }
 
-  // ຟັງຊັ່ນບັນທຶກສຽງຫຼືຢຸດບັນທຶກ
-  const toggleRecording = () => {
-    if (isRecording) {
-      // ສະແດງ dialog ຢືນຢັນການຢຸດບັນທຶກ
-      setShowStopConfirmation(true);
-    } else {
-      startRecording();
-    }
-  };
-
-    // ສ້າງຟັງຊັນໃໝ່ທີ່ຮັບ parameters ໂດຍກົງ
-    const updateRecordingTime = () => {
-      const now = Date.now();
-      const diff = now - startTimeRef.current;
-      const totalSeconds = Math.floor(diff / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      
-      const formattedHours = String(hours).padStart(2, '0');
-      const formattedMinutes = String(minutes).padStart(2, '0');
-      const formattedSeconds = String(seconds).padStart(2, '0');
-      
-      // ຖ້າເກີນ 1 ຊົ່ວໂມງ ໃຫ້ສະແດງ ຊົ່ວໂມງ:ນາທີ:ວິນາທີ
-      if (hours > 0) {
-        setRecordingTime(`${formattedHours}:${formattedMinutes}:${formattedSeconds}`);
-        return;
-      }
-      
-      // ກໍລະນີປົກກະຕິ (ບໍ່ເກີນ 1 ຊົ່ວໂມງ)
-      setRecordingTime(`${formattedMinutes}:${formattedSeconds}`);
-    };
+  const stopRecording = () => {
+   setOpenTranscript(false)
+   stop(); 
+  }
   
 
     
@@ -362,25 +193,17 @@ export default function RecordPage() {
           <div className="flex flex-col items-center justify-center">
             {/* ປຸ່ມບັນທຶກສຽງ */}
             <div className="mb-6 relative">
-              {!isLastChunkRef.current && (
-                  <Button
-                  onClick={toggleRecording}
-                  size="lg"
-                  className={`rounded-full p-6 cursor-pointer border-1 border-red-500 ${isRecording ? "bg-red-500 hover:bg-red-600" : "bg-red-500 hover:bg-red-600"}`}
-                >
-                  <div className="flex items-center gap-2">
-                    {isRecording ? (
-                      <FaStop className="h-5 w-5 text-white" />
-                    ) : (
-                      <FaMicrophone className="h-5 w-5 text-white" />
-                    )}
-                    <span className="text-white font-medium">{isRecording ? "ຢຸດການບັນທຶກ" : "ເລີ່ມການບັນທຶກ"}</span>
-                  </div>
-                </Button>
-              )}
-              {isLastChunkRef.current && (
+              
+                {status === 'idle' && (
+                    <StartRecordButton onClick={startRecording} />
+                )}
+                {(status === 'recording' || status === 'paused')  && (
+                    <StopRecordButton onStop={stopRecording} onPause={pause} onResume={resume} />
+                )}
+              {status === 'stopped' && (
                   <DisableRecordButton />
               )}
+
             </div>
 
             {/* ເວລາການບັນທຶກ */}
@@ -388,39 +211,19 @@ export default function RecordPage() {
               {recordingTime}
             </div>
 
-            {isLastChunkRef.current && !openTranscript && (
+            {status === 'stopped' && !openTranscript && (
               <LoadingAnimationText />
             )}
 
           </div>
 
-          {/* Dialog ຢືນຢັນການຢຸດບັນທຶກ */}
-          <AlertDialog open={showStopConfirmation} onOpenChange={setShowStopConfirmation}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>ຢືນຢັນການຢຸດການບັນທຶກ</AlertDialogTitle>
-                <AlertDialogDescription>
-                  ທ່ານແນ່ໃຈບໍວ່າຕ້ອງການຢຸດການບັນທຶກສຽງບໍ່? 
-                  ຫຼັງຈາກຢຸດແລ້ວຂໍ້ມູນຈະຖືກສົ່ງໄປປະມວນຜົນ.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>ຍົກເລີກ</AlertDialogCancel>
-                <AlertDialogAction 
-                  onClick={stopRecording}
-                  className="bg-red-500 hover:bg-red-600"
-                >
-                  ຢຸດການບັນທຶກ
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          
         </div>
 
 
-        {currentAudioId && openTranscript && (
+        {status === 'stopped' && openTranscript && currentAudioIdRef.current && (
           <div className='max-w-[705px] w-full mx-auto p-4 my-10'>
-              <TranscriptSection audioId={currentAudioId} />
+              <TranscriptSection audioId={currentAudioIdRef.current} />
           </div>
         )}
 

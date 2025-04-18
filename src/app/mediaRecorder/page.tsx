@@ -9,6 +9,7 @@ type Status = 'idle' | 'recording' | 'paused' | 'stopped' | 'error';
 const MediaRecorderPage = () => {
 
     const [blobUrl, setBlobUrl] = useState<Array<string>>([]);
+    console.log("calling me recorder");
 
     const { status, recordingTime, start, stop, pause, resume } = useChunkedAudioRecorder({
         onChunk: async (blob, chunkIndex) => {

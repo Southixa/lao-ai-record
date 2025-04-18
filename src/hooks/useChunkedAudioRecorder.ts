@@ -14,8 +14,9 @@ export interface ChunkedRecorderOptions {
 export function useChunkedAudioRecorder({
     onChunk,
     constraints = { audio: true },
-    timesliceSeconds = 5,
+    timesliceSeconds = 600,
   }: ChunkedRecorderOptions) {
+
     const [status, setStatus]     = useState<Status>('idle');
     const [recordingTime, setRecordingTime] = useState('00:00');
 
@@ -171,6 +172,24 @@ export function useChunkedAudioRecorder({
         }
      }, [status]);
 
+     const reset = useCallback(() => {
+        if(mediaRecorderRef.current) {
+            mediaRecorderRef.current.stop();
+            mediaRecorderRef.current = null;
+        }
+        if(clockTimerRef.current) {
+            clearInterval(clockTimerRef.current);
+            clockTimerRef.current = null;
+        }
+        if(streamRef.current){
+            streamRef.current.getTracks().forEach(t => t.stop());
+        }
+        setStatus('idle');
+        setRecordingTime('00:00');
+        chunkIndexRef.current = 0;
+        lastChunkTotalTimeRef.current = 0;
+     }, []);
+
      useEffect(() => {
         return () => {
             if(mediaRecorderRef.current) {
@@ -185,6 +204,6 @@ export function useChunkedAudioRecorder({
         };
       }, []);
 
-     return { status, recordingTime, start, stop, pause, resume }
+     return { status, recordingTime, start, stop, pause, resume, reset }
 
   }

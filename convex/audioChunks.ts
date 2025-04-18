@@ -255,7 +255,7 @@ export const createAudioChunkWithTranscribe = action({
     endTime: v.number(),
     duration: v.number(),
     filePath: v.string(),
-    storageId: v.optional(v.string()),
+    storageId: v.optional(v.id("_storage")),
     processedStatus: v.optional(v.string()),
     // args ຈາກ transcribeAudio
     audioData: v.string(), // ຂໍ້ມູນສຽງເປັນຮູບແບບ base64
@@ -284,6 +284,15 @@ export const createAudioChunkWithTranscribe = action({
       // ກຳນົດສະຖານະໃຫ້ສຳເລັດເມື່ອຖອດຄວາມແລ້ວ
       const newProcessedStatus = "completed";
 
+      // ສ້າງ URL ສຳຫຼັບຟາຍສຽງຈາກ storage ID (ຖ້າມີ)
+      let fileUrl = filePath;
+      if (storageId) {
+        const url = await ctx.storage.getUrl(storageId as Id<"_storage">);
+        if (url !== null) {
+          fileUrl = url;
+        }
+      }
+
       // 2. ເອີ້ນໃຊ້ createAudioChunk ເພື່ອບັນທຶກຂໍ້ມູນ
       const chunkResult: ChunkResult = await ctx.runMutation(api.audioChunks.createAudioChunk, {
         audioId,
@@ -291,7 +300,7 @@ export const createAudioChunkWithTranscribe = action({
         startTime,
         endTime,
         duration,
-        filePath,
+        filePath: fileUrl, // ໃຊ້ URL ທີ່ສ້າງຈາກ storageId
         storageId,
         processedStatus: newProcessedStatus, // ກຳນົດສະຖານະວ່າປະມວນຜົນແລ້ວ
         formattedContent: JSON.stringify(transcriptionResult.formattedTranscript)
