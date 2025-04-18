@@ -146,6 +146,7 @@ export function useChunkedAudioRecorder({
         if(status === 'recording' || status === 'paused') {
             if(mediaRecorderRef.current) {
                 mediaRecorderRef.current.stop();
+                mediaRecorderRef.current = null;
             }
             if(clockTimerRef.current) {
                 clearInterval(clockTimerRef.current);
@@ -172,17 +173,14 @@ export function useChunkedAudioRecorder({
 
      useEffect(() => {
         return () => {
-            if(status === 'recording' || status === 'paused') {
-                if(mediaRecorderRef.current) {
-                    mediaRecorderRef.current.stop(); 
-                }
-                if(streamRef.current){
-                    streamRef.current.getTracks().forEach(t => t.stop());
-                }
-                if(clockTimerRef.current) {
-                    clearInterval(clockTimerRef.current);
-                }
-                setStatus('stopped');
+            if(mediaRecorderRef.current) {
+                mediaRecorderRef.current.stop(); 
+            }
+            if(streamRef.current){
+                streamRef.current.getTracks().forEach(t => t.stop());
+            }
+            if(clockTimerRef.current) {
+                clearInterval(clockTimerRef.current);
             }
         };
       }, []);
