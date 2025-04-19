@@ -1,7 +1,7 @@
 import React, { useRef } from 'react'
 import Image from 'next/image';
 import { Id } from '../../../../convex/_generated/dataModel';
-import AudioPlayer from './AudioPlayer';
+import AudioPlayer, { AudioPlayerHandle } from './AudioPlayer';
 
 interface TranscriptChunk {
   _id: Id<"audioChunks">
@@ -30,10 +30,8 @@ interface TranscriptChunksProps {
 }
 
 export const TranscriptChunks = ({ chunk }: TranscriptChunksProps) => {
-  // Create a reference to track the current AudioPlayer's seek function
-  const audioPlayerRef = useRef<{
-    seekToTimestamp: (timestamp: string) => void
-  } | null>(null);
+  // Create a reference to the AudioPlayer component
+  const audioPlayerRef = useRef<AudioPlayerHandle>(null);
 
   // Parse speaker string to determine gender (e.g., "Speaker A(m)" -> male)
   const getSpeakerGender = (speaker: string): 'male' | 'female' => {
@@ -47,20 +45,13 @@ export const TranscriptChunks = ({ chunk }: TranscriptChunksProps) => {
     return match ? match[1] : '';
   };
 
-  // Updated playFromTimestamp to use the audio player reference
+  // Updated playFromTimestamp to directly use audioPlayerRef
   const playFromTimestamp = (timestamp: string) => {
     if (audioPlayerRef.current) {
       audioPlayerRef.current.seekToTimestamp(timestamp);
     } else {
       console.log("AudioPlayer not ready yet");
     }
-  };
-
-  // This function will be called by the AudioPlayer to register its seek function
-  const registerAudioPlayer = (seekFunction: (timestamp: string) => void) => {
-    audioPlayerRef.current = {
-      seekToTimestamp: seekFunction
-    };
   };
 
   // Process chunk to get transcript content
@@ -77,16 +68,23 @@ export const TranscriptChunks = ({ chunk }: TranscriptChunksProps) => {
   }
 
   if (transcriptItems.length === 0) {
-    return <p className="whitespace-pre-line text-xs sm:text-sm">ບໍ່ພົບຂໍ້ຄວາມໃນສຽງ</p>;
+    return (
+        <div>
+            <AudioPlayer 
+            ref={audioPlayerRef}
+            audioUrl={chunk.filePath} 
+        />
+        <p className="whitespace-pre-line text-xs sm:text-sm mt-4">ບໍ່ພົບຂໍ້ຄວາມໃນສຽງ</p>
+        </div>
+    )
   }
 
   return (
     <div>
-      {/* Audio Player */}
+      {/* Audio Player with ref */}
       <AudioPlayer 
+        ref={audioPlayerRef}
         audioUrl={chunk.filePath} 
-        playFromTimestamp={playFromTimestamp}
-        onReady={(seekFn) => registerAudioPlayer(seekFn)} 
       />
       
       {/* Transcript Items */}

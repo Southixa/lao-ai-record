@@ -1,44 +1,45 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { FaPlayCircle, FaPauseCircle } from 'react-icons/fa';
 import { Button } from "@/components/ui/button";
 import WaveSurfer from 'wavesurfer.js';
 import Hover from 'wavesurfer.js/dist/plugins/hover.esm.js';
 
-interface AudioPlayerProps {
-  audioUrl: string;
-  playFromTimestamp: (timestamp: string) => void;
-  onReady?: (seekFunction: (timestamp: string) => void) => void;
+// Define methods that will be exposed to parent component
+export interface AudioPlayerHandle {
+  seekToTimestamp: (timestamp: string) => void;
 }
 
-export default function AudioPlayer({ 
-  audioUrl, 
-  playFromTimestamp,
-  onReady
-}: AudioPlayerProps) {
+interface AudioPlayerProps {
+  audioUrl: string;
+}
+
+const AudioPlayer = forwardRef<AudioPlayerHandle, AudioPlayerProps>(({ audioUrl }, ref) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const waveformRef = useRef<HTMLDivElement | null>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
 
-  // ຟັງຊັ່ນ seek ໄປຫາເວລາທີ່ກຳນົດໃນ waveform
-  const seekToTimestamp = (timestamp: string) => {
-    // ຖ້າຍັງບໍ່ໄດ້ເລີ່ມໂຫຼດ, ໃຫ້ເລີ່ມໂຫຼດກ່ອນ
-    if (!isInitialized) {
-      initializeWaveSurfer();
-      // ບັນທຶກໄວ້ວ່າຕ້ອງ seek ຫຼັງຈາກໂຫຼດສຳເລັດ
-      wavesurferRef.current?.once('ready', () => {
-        performSeek(timestamp);
-      });
-      return;
-    }
+  // Expose seekToTimestamp method to parent component
+  useImperativeHandle(ref, () => ({
+    seekToTimestamp: (timestamp: string) => {
+      // ຖ້າຍັງບໍ່ໄດ້ເລີ່ມໂຫຼດ, ໃຫ້ເລີ່ມໂຫຼດກ່ອນ
+      if (!isInitialized) {
+        initializeWaveSurfer();
+        // ບັນທຶກໄວ້ວ່າຕ້ອງ seek ຫຼັງຈາກໂຫຼດສຳເລັດ
+        wavesurferRef.current?.once('ready', () => {
+          performSeek(timestamp);
+        });
+        return;
+      }
 
-    if (!wavesurferRef.current) return;
-    
-    performSeek(timestamp);
-  };
+      if (!wavesurferRef.current) return;
+      
+      performSeek(timestamp);
+    }
+  }));
 
   // ຟັງຊັ່ນທີ່ແທ້ຈິງໃນການ seek
   const performSeek = (timestamp: string) => {
@@ -94,11 +95,6 @@ export default function AudioPlayer({
       console.log('WaveSurfer is ready');
       setIsLoading(false);
       setIsInitialized(true);
-      
-      // ສົ່ງຟັງຊັ່ນ seekToTimestamp ໄປໃຫ້ parent component
-      if (onReady) {
-        onReady(seekToTimestamp);
-      }
     });
 
     // ເຫດການເມື່ອການຫຼິ້ນສຽງຈົບ
@@ -194,4 +190,9 @@ export default function AudioPlayer({
       </div>
     </div>
   );
-} 
+});
+
+// Add display name for better debugging
+AudioPlayer.displayName = 'AudioPlayer';
+
+export default AudioPlayer; 

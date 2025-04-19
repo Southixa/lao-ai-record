@@ -69,7 +69,7 @@ export default function RecordPage() {
 
   const { status, recordingTime, start, stop, pause, resume, reset } = useChunkedAudioRecorder({
     onChunk: handleChunkAudio,
-    timesliceSeconds: 60,
+    timesliceSeconds: 10,
 });
 
     useEffect(() => {

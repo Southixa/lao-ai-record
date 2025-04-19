@@ -27,17 +27,23 @@ export const transcribeAudio = action({
       const prompt = `Transcribe the following audio file in ${languageName} language. 
       If you detect other languages besides ${languageName} in the audio, transcribe those parts in their original language and combine them seamlessly without marking the language.
       Format the transcript with timecode, speaker identification with gender, and caption.
-      Use the format: [MM:SS] Speaker A(f)/A(m)/B(f)/B(m): Caption text
+      Use strictly the format: [MM:SS] Speaker A(f)/A(m)/B(f)/B(m): Caption text
+      The timecode must only have minutes and seconds (MM:SS) with no hours component. For example: [01:45] not [00:01:45] or [01:45:800].
       Identify different speakers as Speaker A, B, C, etc., and include their gender in parentheses: (f) for female and (m) for male.
       Write complete, natural-sounding sentences rather than short fragments. Maintain context between sentences and ensure each caption contains a full thought where possible.
       Group related short phrases into single, coherent sentences rather than breaking them into multiple short captions.
+      
+      Example output format:
+      [00:00] Speaker A(m): ໂອເຄ ມັນກະເວົ້າໄດ້ເດ
+      
       If there is no speech detected, return exactly "NO_SPEECH_DETECTED".
       Return only the formatted transcript without additional explanation.`;
       
       // ສົ່ງຄຳຂໍໄປຫາ Gemini API
       // const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-exp-03-25:generateContent?key=${apiKey}`, {
       // const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent?key=${apiKey}`, {
+      // const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-03-25:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
